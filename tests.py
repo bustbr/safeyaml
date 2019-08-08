@@ -1,23 +1,24 @@
+import glob
 import io
 import os
-import glob
-import yaml
+
 import pytest
+import yaml
 
 import safeyaml
 
 SMOKE_TESTS = {
-    """ [0] """:            [0],
-    """ [1.2] """:          [1.2],
-    """ [-3.4] """:         [-3.4],
-    """ [+5.6] """:         [+5.6],
-    """ "test": 1 """:      {'test': 1},
-    """ x: 'test' """:      {'x': 'test'},
-    """ [1 ,2,3] """:       [1, 2, 3],
-    """ [1,2,3,] """:       [1, 2, 3],
-    """ {"a":1} """:        {'a': 1},
-    """ {'b':2,} """:       {'b': 2},
-    """ [1  #foo\n] """:    [1],
+    """ [0] """: [0],
+    """ [1.2] """: [1.2],
+    """ [-3.4] """: [-3.4],
+    """ [+5.6] """: [+5.6],
+    """ "test": 1 """: {"test": 1},
+    """ x: 'test' """: {"x": "test"},
+    """ [1 ,2,3] """: [1, 2, 3],
+    """ [1,2,3,] """: [1, 2, 3],
+    """ {"a":1} """: {"a": 1},
+    """ {'b':2,} """: {"b": 2},
+    """ [1  #foo\n] """: [1],
 }
 
 
@@ -38,15 +39,15 @@ def test_fix(path):
 
 
 def check_file(path, validate=False, fix=False):
-    output_file = '{}.output'.format(path)
-    error_file = '{}.error'.format(path)
+    output_file = "{}.output".format(path)
+    error_file = "{}.error".format(path)
 
     with open(path) as fh:
         contents = fh.read()
 
         if os.path.exists(error_file):
             with open(error_file) as fh:
-                name, pos = fh.readline().split(':')
+                name, pos = fh.readline().split(":")
                 pos = int(pos)
 
             with pytest.raises(safeyaml.ParserErr) as excinfo:
@@ -57,10 +58,7 @@ def check_file(path, validate=False, fix=False):
             assert error.pos == pos
             return
 
-        options = safeyaml.Options(
-            fix_unquoted=fix,
-            fix_nospace=fix,
-        )
+        options = safeyaml.Options(fix_unquoted=fix, fix_nospace=fix)
 
         output = io.StringIO()
         obj = safeyaml.parse(contents, output=output, options=options)[0]
@@ -87,5 +85,5 @@ def check_file(path, validate=False, fix=False):
                 assert output == expected_output
 
 
-if __name__ == '__main__':
-    pytest.main(['-q', __file__])
+if __name__ == "__main__":
+    pytest.main(["-q", __file__])
