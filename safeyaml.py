@@ -7,6 +7,11 @@ import re
 import sys
 from collections import OrderedDict
 
+quote_chars = "\"'"
+
+whitespace_h_chars = " ", "\t"
+whitespace_v_chars = "\r", "\n"
+whitespace_chars = whitespace_h_chars + whitespace_v_chars
 whitespace = re.compile(r"(?:\ |\t|\r|\n)+")
 
 comment = re.compile(r"(#[^\r\n]*(?:\r?\n|$))+")
@@ -15,12 +20,9 @@ int_b10 = re.compile(r"\d[\d]*")
 flt_b10 = re.compile(r"\.[\d]+")
 exp_b10 = re.compile(r"[eE](?:\+|-)?[\d+]")
 
-string_dq = re.compile(
-    r'"(?:[^"\\\n\x00-\x1F\uD800-\uDFFF]|\\(?:[\'"\\/bfnrt]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))*"'
-)
-string_sq = re.compile(
-    r"'(?:[^'\\\n\x00-\x1F\uD800-\uDFFF]|\\(?:[\"'\\/bfnrt]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))*'"
-)
+string_esc = r"\\(?:['\"\\/bfnrt]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})"
+string_dq = re.compile(r'"(?:[^"\\\n\x00-\x1F\uD800-\uDFFF]|{})*"'.format(string_esc))
+string_sq = re.compile(r"'(?:[^'\\\n\x00-\x1F\uD800-\uDFFF]|{})*'".format(string_esc))
 
 identifier = re.compile(r"(?!\d)[\w.$]+")
 barewords = re.compile(
@@ -194,6 +196,28 @@ def peek_line(buf, pos):
     return buf[start:pos]
 
 
+def skip_to_eol(buf, pos):
+    peek = ""
+    while pos < len(buf):
+        peek = buf[pos]
+        if peek in whitespace_v_chars:
+            break
+        else:
+            pos += 1
+    return pos, peek
+
+
+def skip_h_whitespaces(buf, pos):
+    peek = ""
+    while pos < len(buf):
+        peek = buf[pos]
+        if peek in whitespace_h_chars:
+            pos += 1
+        else:
+            break
+    return pos, peek
+
+
 def move_to_next(buf, pos):
     line_pos = pos
     next_line = False
@@ -219,14 +243,16 @@ def move_to_next(buf, pos):
     return pos, pos - line_pos, next_line
 
 
-def skip_whitespace(buf, pos, output):
+def skip_whitespace(buf, pos, output=None):
     m = whitespace.match(buf, pos)
     while m:
-        output.write(buf[pos : m.end()])
+        if output:
+            output.write(buf[pos : m.end()])
         pos = m.end()
         m = comment.match(buf, pos)
         if m:
-            output.write(buf[pos : m.end()])
+            if output:
+                output.write(buf[pos : m.end()])
             pos = m.end()
             m = whitespace.match(buf, pos)
     return pos
@@ -267,7 +293,7 @@ def parse_structure(buf, pos, output, options, indent=0, at_root=False):
 
     m = key_name.match(buf, pos)
 
-    if peek == '"' or peek == "'" or m:
+    if peek in quote_chars or m:
         return parse_indented_map(buf, pos, output, options, my_indent, at_root)
 
     if peek == "{":
@@ -373,8 +399,11 @@ def parse_indented_map(buf, pos, output, options, my_indent, at_root):
                 "Can't have duplicate keys: {} is defined twice.".format(repr(name)),
             )
 
-        if buf[pos] != ":":
-            if is_bare or not at_root:
+        peek = buf[pos] if pos < len(buf) else ""
+        if peek != ":":
+            if peek in whitespace_h_chars:
+                pos = skip_whitespace(buf, pos)
+            elif is_bare or not at_root:
                 raise BadKey(
                     buf,
                     pos,
@@ -393,7 +422,7 @@ def parse_indented_map(buf, pos, output, options, my_indent, at_root):
 
         output.write(":")
         pos += 1
-        if buf[pos] not in (" ", "\r", "\n"):
+        if buf[pos] not in whitespace_v_chars:
             output.write(" ")
 
         new_pos, new_indent, next_line = move_to_next(buf, pos)
@@ -405,7 +434,6 @@ def parse_indented_map(buf, pos, output, options, my_indent, at_root):
             )
 
         if not next_line:
-            output.write(buf[pos:new_pos])
             obj, pos = parse_value(buf, new_pos, output, options)
         else:
             output.write(buf[pos : new_pos - new_indent])
@@ -415,6 +443,16 @@ def parse_indented_map(buf, pos, output, options, my_indent, at_root):
 
         # dupe check
         out[name] = obj
+
+        pos, peek = skip_h_whitespaces(buf, pos)
+        if peek == "#":
+            output.write(" #")
+            pos, peek = skip_h_whitespaces(buf, pos + 1)
+            new_pos, peek = skip_to_eol(buf, pos)
+            comment = buf[pos:new_pos].strip()
+            if comment:
+                output.write(" " + comment)
+            pos = new_pos
 
         new_pos, new_indent, next_line = move_to_next(buf, pos)
         if not next_line or new_indent != my_indent:
@@ -466,7 +504,7 @@ def parse_map(buf, pos, output, options):
     out = OrderedDict()
 
     pos += 1
-    pos = skip_whitespace(buf, pos, output)
+    pos = skip_whitespace(buf, pos)
 
     comma = None
 
@@ -477,11 +515,9 @@ def parse_map(buf, pos, output, options):
         if key in out:
             raise DuplicateKey(buf, pos, "duplicate key: {}, {}".format(key, out))
 
-        pos = skip_whitespace(buf, new_pos, output)
+        pos = skip_whitespace(buf, new_pos)
 
         peek = buf[pos]
-
-        # bare key check
 
         if peek == ":":
             output.write(":")
@@ -495,17 +531,15 @@ def parse_map(buf, pos, output, options):
                 ),
             )
 
-        if is_bare and buf[pos] not in (" ", "\r", "\n"):
-            output.write(" ")
-
-        pos = skip_whitespace(buf, pos, output)
+        pos = skip_whitespace(buf, pos)
+        output.write(" ")
 
         item, pos = parse_value(buf, pos, output, options)
 
         # dupe check
         out[key] = item
 
-        pos = skip_whitespace(buf, pos, output)
+        pos = skip_whitespace(buf, pos)
 
         peek = buf[pos]
         comma = False
@@ -513,13 +547,19 @@ def parse_map(buf, pos, output, options):
             pos += 1
             output.write(",")
             comma = True
-            pos = skip_whitespace(buf, pos, output)
         elif peek != "}":
             raise SyntaxErr(
                 buf,
                 pos,
                 "Expecting a ',', or a '{}' but found {}".format("}", repr(peek)),
             )
+
+        peek = buf[pos]
+
+        if peek not in whitespace_v_chars + ("}",):
+            output.write(" ")
+
+        pos = skip_whitespace(buf, pos)
 
     if options.force_commas:
         if out and comma == False:
@@ -529,42 +569,44 @@ def parse_map(buf, pos, output, options):
 
 
 def parse_key(buf, pos, output, options):
-    m = identifier.match(buf, pos)
-    if m:
-        item = buf[pos : m.end()]
-        name = item.lower()
-
-        if name in builtin_names:
-            if options.force_string_keys:
-                item = '"{}"'.format(item)
-            else:
-                raise BadKey(
-                    buf,
-                    pos,
-                    "Found '{}' as a bareword key, Please use quotes around it.".format(
-                        item
-                    ),
-                )
-        elif name in reserved_names:
-            if options.force_string_keys:
-                item = '"{}"'.format(item)
-            else:
-                raise ReservedKey(
-                    buf,
-                    pos,
-                    "Found '{}' as a bareword key, which can be parsed as a boolean. Please use quotes around it.".format(
-                        item
-                    ),
-                )
-        elif options.force_string_keys:
-            item = '"{}"'.format(item)
-
-        output.write(item)
-        pos = m.end()
-        return name, pos, True
+    quote_char = buf[pos] if buf[pos] in quote_chars else ""
+    is_bare = not quote_char
+    if is_bare:
+        name, pos = parse_bare_key(buf, pos, output, options)
     else:
-        name, pos = parse_string(buf, pos, output, options)
-        return name, pos, False
+        try:
+            name, pos = parse_bare_key(buf, pos + 1, output, options)
+            pos += 1
+        except (BadKey, ReservedKey):
+            name, pos = parse_string(buf, pos, output, options)
+    pos = skip_whitespace(buf, pos)
+    return name, pos, is_bare
+
+
+def parse_bare_key(buf, pos, output, options):
+    start_pos = end_pos = pos
+    while True:
+        m = identifier.match(buf, pos)
+        if not m:
+            break
+        end_pos = m.end()
+        pos = skip_whitespace(buf, end_pos)
+
+    item = buf[start_pos:end_pos]
+    if not item:
+        raise BadKey(buf, start_pos, "Found no key.")
+    name = item.lower()
+
+    if (
+        options.force_string_keys
+        or name in builtin_names
+        or name in reserved_names
+        or " " in name
+    ):
+        item = '"{}"'.format(item)
+
+    output.write(item)
+    return name, end_pos
 
 
 def parse_list(buf, pos, output, options):

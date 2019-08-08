@@ -1,0 +1,19 @@
+setting:{a:1,b:2}
+nospaces:"hi"
+manyspaces:     "hi"
+
+"true": false
+"yes": no
+needs quotes: ok
+needs no quotes  : false
+say yes: ok
+
+
+conf:
+  sub:      "ho"
+  bare : line
+  "misquoted" :  "line"
+    #   just a badly indented comment
+  another:  "line"    # with comment
+
+  and:      "another one" #     and another comment   
