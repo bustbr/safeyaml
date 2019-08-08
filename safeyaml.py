@@ -275,7 +275,7 @@ def parse_structure(buf, pos, output, options, indent=0, at_root=False):
 
     m = key_name.match(buf, pos)
 
-    if peek == '"' or peek == '"' or m:
+    if peek == '"' or peek == "'" or m:
         return parse_indented_map(buf, pos, output, options, my_indent, at_root)
 
     if peek == "{":
