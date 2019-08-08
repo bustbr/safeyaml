@@ -58,7 +58,7 @@ def check_file(path, validate=False, fix=False):
             assert error.pos == pos
             return
 
-        options = safeyaml.Options(fix_unquoted=fix, fix_nospace=fix)
+        options = safeyaml.Options()
 
         output = io.StringIO()
         obj = safeyaml.parse(contents, output=output, options=options)[0]

@@ -63,15 +63,7 @@ def get_position(buf, pos):
 
 
 class Options:
-    def __init__(
-        self,
-        fix_unquoted=False,
-        fix_nospace=False,
-        force_string_keys=False,
-        force_commas=False,
-    ):
-        self.fix_unquoted = fix_unquoted
-        self.fix_nospace = fix_nospace
+    def __init__(self, force_string_keys=False, force_commas=False):
         self.force_string_keys = force_string_keys
         self.force_commas = force_commas
 
@@ -402,16 +394,7 @@ def parse_indented_map(buf, pos, output, options, my_indent, at_root):
         output.write(":")
         pos += 1
         if buf[pos] not in (" ", "\r", "\n"):
-            if options.fix_nospace:
-                output.write(" ")
-            else:
-                raise BadKey(
-                    buf,
-                    pos,
-                    "For key {}, expected space or newline after ':', found {}.".format(
-                        repr(name), repr(buf[pos:])
-                    ),
-                )
+            output.write(" ")
 
         new_pos, new_indent, next_line = move_to_next(buf, pos)
         if next_line and new_indent < my_indent:
@@ -513,16 +496,7 @@ def parse_map(buf, pos, output, options):
             )
 
         if is_bare and buf[pos] not in (" ", "\r", "\n"):
-            if options.fix_nospace:
-                output.write(" ")
-            else:
-                raise BadKey(
-                    buf,
-                    pos,
-                    "For key {}, expected space or newline after ':', found {}.".format(
-                        repr(key), repr(buf[pos:])
-                    ),
-                )
+            output.write(" ")
 
         pos = skip_whitespace(buf, pos, output)
 
@@ -748,43 +722,24 @@ def parse_bareword(buf, pos, output, options):
             out = builtin_names[name]
             output.write(name)
             return out, m.end()
-        elif options.fix_unquoted:
-            pass
-        elif item.lower() in reserved_names:
-            raise ReservedKey(
-                buf,
-                pos,
-                "Can't use '{}' as a value. Please either surround it in quotes if it's a string, or replace it with `true` if it's a boolean.".format(
-                    item
-                ),
-            )
-        else:
+
+    m = barewords.match(buf, pos)
+    if m:
+        end = m.end()
+        item = buf[pos:end].strip()
+        output.write('"{}"'.format(item))
+        if buf[end : end + 1] not in ("", "\r", "\n", "#"):
             raise Bareword(
                 buf,
                 pos,
-                "{} doesn't look like 'true', 'false', or 'null', who are you kidding ".format(
-                    repr(item)
+                "The parser is trying its very best but could only make out '{}', but there is other junk on that line. You fix it.".format(
+                    item
                 ),
             )
+        elif buf[end : end + 1] == "#":
+            output.write(" ")
 
-    if options.fix_unquoted:
-        m = barewords.match(buf, pos)
-        if m:
-            end = m.end()
-            item = buf[pos:end].strip()
-            output.write('"{}"'.format(item))
-            if buf[end : end + 1] not in ("", "\r", "\n", "#"):
-                raise Bareword(
-                    buf,
-                    pos,
-                    "The parser is trying its very best but could only make out '{}', but there is other junk on that line. You fix it.".format(
-                        item
-                    ),
-                )
-            elif buf[end : end + 1] == "#":
-                output.write(" ")
-
-            return item, m.end()
+        return item, m.end()
     raise Bareword(
         buf,
         pos,
@@ -804,21 +759,6 @@ if __name__ == "__main__":
         nargs="*",
         default=None,
         help="filename to read, without will read from stdin",
-    )
-    parser.add_argument(
-        "--fix", action="store_true", default=False, help="ask the parser to hog wild"
-    )
-    parser.add_argument(
-        "--fix-unquoted",
-        action="store_true",
-        default=False,
-        help="ask the parser to try its best to parse unquoted strings/barewords",
-    )
-    parser.add_argument(
-        "--fix-nospace",
-        action="store_true",
-        default=False,
-        help="fix map keys not to have ' ' after a ':'",
     )
     parser.add_argument(
         "--force-string-keys",
@@ -843,10 +783,7 @@ if __name__ == "__main__":
     args = parser.parse_args()  # will only return when action is given
 
     options = Options(
-        fix_unquoted=args.fix_unquoted or args.fix,
-        fix_nospace=args.fix_nospace or args.fix,
-        force_string_keys=args.force_string_keys,
-        force_commas=args.force_commas,
+        force_string_keys=args.force_string_keys, force_commas=args.force_commas
     )
 
     if args.in_place:
