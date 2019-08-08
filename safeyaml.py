@@ -22,7 +22,7 @@ string_sq = re.compile(
     r"'(?:[^'\\\n\x00-\x1F\uD800-\uDFFF]|\\(?:[\"'\\/bfnrt]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))*'"
 )
 
-identifier = re.compile(r"(?!\d)[\w\.]+")
+identifier = re.compile(r"(?!\d)[\w.$]+")
 barewords = re.compile(
     r"(?!\d)(?:(?![\r\n#$@%`,:\"\|'\[\]\{\}\&\*\?\<\>]).|:[^\r\n\s])*"
 )

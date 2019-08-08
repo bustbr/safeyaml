@@ -1,0 +1,5 @@
+$id: "something"
+$id$ref: "$id"
+
+database:
+  $ref: "#/definitions/dsn"
