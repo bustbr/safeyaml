@@ -1,0 +1,4 @@
+baa: '^don''t\.forget$'
+foo: 'it''s your birthday'
+qoo: "it''s time"
+bar: "^don't\\.forget$"

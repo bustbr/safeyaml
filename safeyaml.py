@@ -22,7 +22,7 @@ exp_b10 = re.compile(r"[eE](?:\+|-)?[\d+]")
 
 string_esc = r"\\(?:['\"\\/bfnrt]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})"
 string_dq = re.compile(r'"(?:[^"\\\n\x00-\x1F\uD800-\uDFFF]|{})*"'.format(string_esc))
-string_sq = re.compile(r"'(?:[^'\\\n\x00-\x1F\uD800-\uDFFF]|{})*'".format(string_esc))
+string_sq = re.compile(r"'(?:[^'\n\x00-\x1F\uD800-\uDFFF]|{})*'".format(string_esc))
 
 identifier = re.compile(r"(?!\d)[\w.$]+")
 barewords = re.compile(
@@ -650,16 +650,19 @@ def parse_list(buf, pos, output, options):
 
 def parse_string(buf, pos, output, options):
     s = io.StringIO()
-    peek = buf[pos]
+    is_sq = buf[pos] == "'"
 
     # validate string
-    if peek == "'":
-        m = string_sq.match(buf, pos)
-        if m:
-            end = m.end()
-            output.write(buf[pos:end])
-        else:
+    if is_sq:
+        start = end = pos
+        while True:
+            m = string_sq.match(buf, start)
+            if not m:
+                break
+            start = end = m.end()
+        if pos == end:
             raise BadString(buf, pos, "Invalid single quoted string")
+        output.write(buf[pos:end])
     else:
         m = string_dq.match(buf, pos)
         if m:
@@ -667,6 +670,10 @@ def parse_string(buf, pos, output, options):
             output.write(buf[pos:end])
         else:
             raise BadString(buf, pos, "Invalid double quoted string")
+
+    if is_sq:
+        out = buf[pos + 1 : end - 1]
+        return out.replace("''", "'"), end
 
     lo = pos + 1  # skip quotes
     while lo < end - 1:
