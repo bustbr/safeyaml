@@ -609,7 +609,7 @@ def parse_bare_key(buf, pos, output, options):
         or name in reserved_names
         or " " in name
     ):
-        item = '"{}"'.format(item)
+        item = "'{}'".format(item)
 
     output.write(item)
     return name, end_pos
@@ -654,33 +654,33 @@ def parse_list(buf, pos, output, options):
     return out, pos
 
 
-def parse_string(buf, pos, output, options):
+def parse_sq_string(buf, pos, output, options):
+    end = pos
+
+    while True:
+        m = string_sq.match(buf, end)
+        if not m:
+            break
+        end = m.end()
+
+    if pos == end:
+        raise BadString(buf, pos, "Invalid single quoted string")
+
+    output.write(buf[pos:end])
+
+    val = buf[pos + 1 : end - 1]
+    out = val.replace("''", "'")
+
+    return out, end
+
+
+def parse_dq_string(buf, pos, output, options):
+    m = string_dq.match(buf, pos)
+    if not m:
+        raise BadString(buf, pos, "Invalid double quoted string")
+    end = m.end()
+
     s = io.StringIO()
-    is_sq = buf[pos] == "'"
-
-    # validate string
-    if is_sq:
-        start = end = pos
-        while True:
-            m = string_sq.match(buf, start)
-            if not m:
-                break
-            start = end = m.end()
-        if pos == end:
-            raise BadString(buf, pos, "Invalid single quoted string")
-        output.write(buf[pos:end])
-    else:
-        m = string_dq.match(buf, pos)
-        if m:
-            end = m.end()
-            output.write(buf[pos:end])
-        else:
-            raise BadString(buf, pos, "Invalid double quoted string")
-
-    if is_sq:
-        out = buf[pos + 1 : end - 1]
-        return out.replace("''", "'"), end
-
     lo = pos + 1  # skip quotes
     while lo < end - 1:
         hi = buf.find("\\", lo, end)
@@ -717,9 +717,27 @@ def parse_string(buf, pos, output, options):
 
     out = s.getvalue()
 
+    # prefer output as single quoted string
+    out_raw = buf[pos:end]
+    sq_esc = out_raw.replace(r"\\", "\\")
+    if string_esc.search(sq_esc):
+        output.write(out_raw)
+    else:
+        val = sq_esc[1:-1].replace("'", "''")
+        output.write("'" + val + "'")
+
     # XXX output.write string.escape
 
     return out, end
+
+
+def parse_string(buf, pos, output, options):
+    peek = buf[pos]
+    if peek == "'":
+        return parse_sq_string(buf, pos, output, options)
+    elif peek == '"':
+        return parse_dq_string(buf, pos, output, options)
+    raise BadString("Invalid string quote: {}".format(peek))
 
 
 def parse_number(buf, pos, output, options):
@@ -782,7 +800,7 @@ def parse_bareword(buf, pos, output, options):
     if m:
         end = m.end()
         item = buf[pos:end].strip()
-        output.write('"{}"'.format(item))
+        output.write("'{}'".format(item))
         if buf[end : end + 1] not in ("", "\r", "\n", "#"):
             raise Bareword(
                 buf,

@@ -1,0 +1,3 @@
+foo: 'it''s your birthday'
+bar: '^don''t\.forget$'
+baa: '^don''t\.forget$'
