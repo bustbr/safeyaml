@@ -20,9 +20,15 @@ int_b10 = re.compile(r"\d[\d]*")
 flt_b10 = re.compile(r"\.[\d]+")
 exp_b10 = re.compile(r"[eE](?:\+|-)?[\d+]")
 
-string_esc = r"\\(?:['\"\\/bfnrt]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})"
-string_dq = re.compile(r'"(?:[^"\\\n\x00-\x1F\uD800-\uDFFF]|{})*"'.format(string_esc))
-string_sq = re.compile(r"'(?:[^'\n\x00-\x1F\uD800-\uDFFF]|{})*'".format(string_esc))
+string_esc = re.compile(
+    r"""\\(?:["'/\\bfnrt]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})"""
+)
+string_dq = re.compile(
+    r'"(?:[^"\\\n\x00-\x1F\uD800-\uDFFF]|{})*"'.format(string_esc.pattern)
+)
+string_sq = re.compile(
+    r"'(?:[^'\n\x00-\x1F\uD800-\uDFFF]|{})*'".format(string_esc.pattern)
+)
 
 identifier = re.compile(r"(?!\d)[\w.$]+")
 barewords = re.compile(
@@ -34,15 +40,15 @@ key_name = re.compile(
 )
 
 str_escapes = {
-    "b": "\b",
-    "n": "\n",
-    "f": "\f",
-    "r": "\r",
-    "t": "\t",
-    "/": "/",
     '"': '"',
     "'": "'",
+    "/": "/",
     "\\": "\\",
+    "b": "\b",
+    "f": "\f",
+    "n": "\n",
+    "r": "\r",
+    "t": "\t",
 }
 
 builtin_names = {"null": None, "true": True, "false": False}
